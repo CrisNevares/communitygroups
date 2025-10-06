@@ -3,6 +3,7 @@
 Check for nearby CNCF Community Group chapters when a new chapter request is opened.
 """
 
+import json
 import os
 import re
 import sys
@@ -72,60 +73,77 @@ def fetch_existing_chapters():
         response = requests.get(url, timeout=30)
         response.raise_for_status()
 
-        soup = BeautifulSoup(response.content, 'html.parser')
+        # Extract the localChapters JavaScript variable from the page
+        content = response.text
 
-        # Find all chapter links - they typically follow a pattern
-        chapters = []
+        # Find the start of the localChapters array
+        start_match = re.search(r'var\s+localChapters\s*=\s*\[', content)
 
-        # Look for links that point to chapter pages
-        # Pattern: /cloud-native-{city}/ or /{city}/
-        for link in soup.find_all('a', href=True):
-            href = link.get('href')
-            text = link.get_text(strip=True)
+        if not start_match:
+            print("Could not find localChapters variable in page", file=sys.stderr)
+            return get_fallback_chapters()
 
-            # Filter for chapter links
-            if href and '/community.cncf.io/' in href or (href and href.startswith('/') and text):
-                # Extract chapter name from text or URL
-                chapter_name = text if text else href
+        # Find the matching closing bracket by counting brackets
+        start_pos = start_match.end() - 1  # Position of the opening '['
+        bracket_count = 0
+        end_pos = start_pos
 
-                # Skip navigation links, headers, etc.
-                if chapter_name and len(chapter_name) > 3 and not chapter_name.lower() in ['chapters', 'events', 'home', 'about']:
-                    # Clean up chapter name
-                    chapter_name = re.sub(r'^Cloud Native\s*', '', chapter_name, flags=re.IGNORECASE)
-                    chapter_name = chapter_name.strip()
+        for i in range(start_pos, len(content)):
+            if content[i] == '[':
+                bracket_count += 1
+            elif content[i] == ']':
+                bracket_count -= 1
+                if bracket_count == 0:
+                    end_pos = i + 1
+                    break
 
-                    if chapter_name and chapter_name not in chapters:
-                        chapters.append({
-                            'name': chapter_name,
-                            'url': href if href.startswith('http') else f"https://community.cncf.io{href}"
-                        })
+        if bracket_count != 0:
+            print("Could not find matching bracket for localChapters array", file=sys.stderr)
+            return get_fallback_chapters()
 
-        # Alternative approach: look for specific HTML structure
-        # This may need to be adjusted based on the actual page structure
-        chapter_cards = soup.find_all(['div', 'article', 'section'], class_=re.compile(r'chapter|community|group', re.I))
+        chapters_json = content[start_pos:end_pos]
 
-        for card in chapter_cards:
-            name_elem = card.find(['h2', 'h3', 'h4', 'a'])
-            if name_elem:
-                chapter_name = name_elem.get_text(strip=True)
-                chapter_name = re.sub(r'^Cloud Native\s*', '', chapter_name, flags=re.IGNORECASE)
+        try:
+            # Parse the JSON array
+            chapters_data = json.loads(chapters_json)
 
-                link_elem = card.find('a', href=True)
-                chapter_url = link_elem.get('href') if link_elem else ''
+            chapters = []
+            for chapter in chapters_data:
+                # Extract chapter information
+                city = chapter.get('city_name') or chapter.get('city', '')
+                country = chapter.get('country', '')
+                url = chapter.get('url', '')
+                latitude = chapter.get('latitude')
+                longitude = chapter.get('longitude')
 
-                if chapter_url and not chapter_url.startswith('http'):
-                    chapter_url = f"https://community.cncf.io{chapter_url}"
+                # Create a readable name
+                if city and country:
+                    name = f"{city}, {country}"
+                elif city:
+                    name = city
+                else:
+                    # Extract name from URL as fallback
+                    name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
 
-                if chapter_name and chapter_name not in [c['name'] for c in chapters]:
+                if name and url:
                     chapters.append({
-                        'name': chapter_name,
-                        'url': chapter_url
+                        'name': name,
+                        'url': url,
+                        'latitude': latitude,
+                        'longitude': longitude
                     })
 
-        return chapters if chapters else get_fallback_chapters()
+            print(f"Successfully parsed {len(chapters)} chapters from JavaScript data", file=sys.stderr)
+            return chapters
+        except json.JSONDecodeError as e:
+            print(f"Error parsing JSON data: {e}", file=sys.stderr)
+            return get_fallback_chapters()
 
     except requests.RequestException as e:
         print(f"Error fetching chapters: {e}", file=sys.stderr)
+        return get_fallback_chapters()
+    except Exception as e:
+        print(f"Error parsing chapters data: {e}", file=sys.stderr)
         return get_fallback_chapters()
 
 def get_fallback_chapters():
@@ -161,7 +179,11 @@ def find_nearby_chapters(requested_location, existing_chapters):
     nearby_chapters = []
 
     for chapter in existing_chapters:
-        chapter_coords = get_coordinates(chapter['name'])
+        # Use coordinates from the chapter data if available, otherwise geocode
+        if chapter.get('latitude') is not None and chapter.get('longitude') is not None:
+            chapter_coords = (chapter['latitude'], chapter['longitude'])
+        else:
+            chapter_coords = get_coordinates(chapter['name'])
 
         if chapter_coords:
             distance = geodesic(requested_coords, chapter_coords).kilometers
