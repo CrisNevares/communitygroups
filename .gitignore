@@ -6,3 +6,6 @@ journal/
 
 # Local VSCode Settings
 .vscode/
+
+# Local .env
+.env
