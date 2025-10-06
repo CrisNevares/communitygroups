@@ -9,3 +9,6 @@ journal/
 
 # Local .env
 .env
+
+# Local Claude
+.claude/
