@@ -50,7 +50,7 @@ Please check out our [best_practices](./best_practices.md).
 
 ## How to apply?
 
-Applications can now be submitted via a [GitHub issue](https://github.com/cncf/communitygroups/issues/new?assignees=&labels=&projects=&template=new-group-request.yaml&title=%5BGroup+Request%5D+Create+a+new+chapter). Once a GitHub issue will be filled, there will be a 30-day grace period. If you do not hear back after that amount of time has passed, please reach out to community-groups@cncf.io.
+Applications can now be submitted via a [GitHub issue](https://github.com/cncf/communitygroups/issues/new?assignees=&labels=&projects=&template=new-group-request.yaml&title=%5BGroup+Request%5D+Create+a+new+chapter). Once a GitHub issue is filed, there will be a 30-day grace period. If you do not hear back after that amount of time has passed, please reach out to community-groups@cncf.io.
 
 ## Bevy Training
 
@@ -69,9 +69,9 @@ Bevy is the platform that backs community.cncf.io. With over 230 ACTIVE chapters
 
 ## Naming your chapter
 
-Please use "Cloud Native CITY NAME" when naming your chapter. We ask that you avoid using "CNCF" in the naming convention, as it can misslead people into think CNCF has employees in that location. You may, however, use a tag line that states something similar to, "An official CNCF community group (or chapter)."
+Please use "Cloud Native CITY NAME" when naming your chapter. We ask that you avoid using "CNCF" in the naming convention, as it can mislead people into think CNCF has employees in that location. You may, however, use a tag line that states something similar to, "An official CNCF community group (or chapter)."
 
-"CNCG" is an internal acronym we currenyly use at CNCF and among organizers, but it has not yet gained traction. So we encourage people to avoid using it in the names of their chapters, as of 2023.
+"CNCG" is an internal acronym we currently use at CNCF and among organizers, but it has not yet gained traction. So we encourage people to avoid using it in the names of their chapters, as of 2023.
 
 ## Communication
 
