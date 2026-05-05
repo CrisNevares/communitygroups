@@ -12,7 +12,7 @@ Each team should have no more than 50% of organizers from the same company. This
 IMPORTANT: Cloud Native Community Groups are NOT to be used for self benefit. In an effort to avoid monopolizing practices, organizers cannot belong to more than two (2) community groups as an organizer. You may of course help advise other groups, but will not be recognized as an organizer on the front-end of said chapter page if you do not reside in, or travel to that chapter location 50% of the calendar year.
 
 ### All organizers are leaders
-Thank you in advance for not assuming lead organizer roles, as Bevy can be confusing with the permission sets.
+Thank you in advance for not assuming lead organizer roles. For details on roles and permissions, please refer to the [OCGroups documentation](https://ocgroups.dev/docs#/guides/group-dashboard?id=roles-and-permissions).
 
 ### Assignments
 We do however, suggest your team figure out who has more experience organizing different facets of community groups like:
@@ -28,7 +28,7 @@ NOTE: If your team is small, it is common to have 1-2 assignments per person.
 
 ### Team additions
 
-If you wish to add someone or multiple people to your team, you may submit [an organizer GitHub issue/request](https://github.com/cncf/communitygroups/issues) on behalf of these co-organizers and have that person (or people) comment on the issue agreeing the the organizer terms. Or this peron / these people can submit on behalf of themselves and at least 50% of organizers shall comment with affirmation of said person being added as a co-organizer.
+If you wish to add someone or multiple people to your team, you may submit [an organizer GitHub issue/request](https://github.com/cncf/communitygroups/issues) on behalf of these co-organizers and have that person (or people) comment on the issue agreeing the the organizer terms. Or this person / these people can submit on behalf of themselves and at least 50% of organizers shall comment with affirmation of said person being added as a co-organizer.
 
 ### Team resignation
 
