@@ -55,7 +55,7 @@ Each of the steps above are now described in more detail.
 
 ## 0. Create the Cloud Native Community Group
 
-CNCF staff is responsible for creating the Cloud Native Community Groups (see the instructions in the [README.md](../README.md) file, but please see the official [Bevy documentation on how to create a chapter](https://help.bevylabs.com/article/454-create-a-chapter).
+CNCF staff is responsible for creating the Cloud Native Community Groups (see the instructions in the [README.md](../README.md) file, but to understand the various admin rights of who can create new groups, please visit the [OCGroups documentation](https://ocgroups.dev/docs#/getting-started/choose-dashboard?id=how-to-pick-the-right-workspace).
 It is useful to create a community slack channel `#cloud-native-<city name>` for event coordination ([CNCF Slack](https://app.slack.com/client/T08PSQ7BQ/C015WPLD3F1)).
 
 The **description** of the group is left to the discretion of the organizers.
@@ -98,7 +98,7 @@ It is better to find a place in a central location. Downtown would be ideal beca
 If you are on a budget to order food, it is usually best to opt for cold dishes. It is highly recommended to offer vegan and vegetarian options.
 
 What to offer the sponsors in return
-* Thank your sponsors by highlighting them in the "Sponsor" tab within your Bevy event settings. You can do this by uploading their logo and adding a link that takes people to their website.
+* Thank your sponsors by highlighting them in the event settings on your community platform. For specific instructions on managing sponsors and reusable profiles, please refer to the [OCGroups documentation](https://ocgroups.dev/docs#/guides/group-dashboard?id=sponsors-reusable-profiles).
 * Offer your sponsor to set up a small table in our just outside the room, so people can engage in conversation.
 * Offer your sponsor no more than 15 minutes of talking time on the stage. But be sure they are NOT the main content.
 
