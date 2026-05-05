@@ -32,7 +32,7 @@ For all Cloud Native Community Groups, CNCF offers the following benefits:
 
 - One-time complimentary swag coupon of $100 USD to the CNCF Store provided to each community group (not to each organizer), is available after hosting 2 successful (over 10 people attended) in-person events per chapter within 3 months or 90 days. NOTE: Registration must happen within the Bevy platform for this coupon to be earned. Requesting your voucher - write to community-groups@cncf.io with a link to your past Bevy event pages. We will make an exception for virtual events, if your event has over 100 attendees.
 - Joining the CNCF organizer-exclusive Slack channel for collaboration
-- Boosting the visibility of your community group and events. See below under the “Communication” section for more details.
+- Boosting the visibility of your community group and events. See below under the "Communication" section for more details.
 - 25% discount to Linux Foundation training exams for CKAD and KCNA.
 - Discounts to KubeCon + CloudNativeCons around the world
 - Cost coverage for the hosted community platform, Bevy
@@ -57,14 +57,14 @@ Applications can now be submitted via a [GitHub issue](https://github.com/cncf/c
 Bevy is the platform that backs community.cncf.io. With over 230 ACTIVE chapters (as of 2025), Bevy allows for in-person and virtual meetups, co-hosting, emailing your attendees, transparent analytics for organizers, and a microsite (small website) that can feature sponsors, speakers, and more!
 
 - CNCF and Bevy have organized the training session for the Community Groups organizers. It has been recorded and now [available on YouTube](https://www.youtube.com/watch?v=_rBdomoYlmc).
-- You can also access the Bevy Help Portal at <https://help.bevylabs.com/>.
+- You can also access the [Open Community Groups documentation](https://ocgroups.dev/docs#/?).
 - [Bevy FAQ can be found here](https://github.com/cncf/communitygroups/blob/main/FAQ.md).
 - If you want to test video features, you can use: <https://tokbox.com/developer/tools/precall/>
 
 ### Support
 
 - If you have any technical difficulties with the platform itself, please reach out to the Bevy platform support by clicking the purple question mark in the bottom right corner of your Bevy chapter dashboard.
-- Troubleshooting: The troubleshooting guide by Bevy is available here: [help.bevylabs.com/article/499-troubleshooting](https://help.bevylabs.com/article/499-troubleshooting)
+- Troubleshooting: [Open Community Groups documentation](https://ocgroups.dev/docs#/?)
 - A LAST RESORT - you can reach out to Audra Montenegro in the CNCF Slack workspace to help you, especially if it is time sensitive.
 
 ## Naming your chapter
@@ -78,8 +78,8 @@ Please use "Cloud Native CITY NAME" when naming your chapter. We ask that you av
 We strive to keep all organizers as up to date as possible when it comes to program updates and changes. Here are a few ways you can stay in the loop:
 
 - Subscribe to our global organizer newsletter by going to your [community profile and then "updates"](https://community.cncf.io/accounts/profile/#updates). There you can opt-in by marking the "Global" checkbox under the "Receive general communications from" header.
-- For current organizers, please reach out to inquiries on the [#community-group-organizers](https://cloud-native.slack.com/archives/C04KB96TA2X) channel in the CNCF slack Workspace. Please avoid using direct messages unless strictly necessary as doing so both has the potential of overwhelming project maintainers and core CNCF staff. Additionally, others with similar questions lose the benefit of public discussion.
-- It's best if you use a public communication channel whenever possible; however, if you need to communicate in private, please feel free to send the program admins a note via community-groups@cncf.io (please use the public channels for any program-related discussion).
+- For current organizers, please reach out to inquiries on the [#community-group-organizers](https://cloud-native.slack.com/archives/C04KB96TA2X) channel in the CNCF slack Workspace. Please avoid using DMs and try to keep conversations in the public channel to allow for visibility.
+- It's best if you use a public communication channel whenever possible; however, if you need to communicate in private, please feel free to send the program admins a note via community-groups@cncf.io.
 
 ## Marketing Best Practices and Resources
 
@@ -87,7 +87,7 @@ We strive to keep all organizers as up to date as possible when it comes to prog
 
 We encourage each chapter to create their own social media accounts on the platforms that are most relevant in their local area, in addition to LinkedIn so CNCF can properly help amplify your announcements.
 
-CNCF is present on [Twitter (X)](https://twitter.com/CloudNativeFdn) and [LinkedIn](https://www.linkedin.com/company/cloud-native-computing-foundation/mycompany/) with over 100,000 followers on each, and a growing number of followers on [Bluesky](https://bsky.app/profile/cncf.io). If you are a CNCF chapter promoting your community on community.cncf.io, then CNCF will be happy to help you promote your meetups on social media. Simply join the [#socialmedia](https://cloud-native.slack.com/archives/C12MRQ97A) channel in the CNCF Slack workspace for amplifications of your post. CNCF staff automaically check that channel each day. Each CNCG is limited to one post amplification per week. NOTE: In the spirit of vendor neutrality, CNCF will not amplify sponsor posts.
+CNCF is present on [Twitter (X)](https://twitter.com/CloudNativeFdn) and [LinkedIn](https://www.linkedin.com/company/cloud-native-computing-foundation/mycompany/) with over 100,000 followers on each platform.
 
 IMPORTANT: Every LinkedIn page created should be created as a company page, and must add CNCF's core community program manager, Audra Montenegro or Helena Spease as an admin.
 
@@ -96,7 +96,7 @@ IMPORTANT: Every LinkedIn page created should be created as a company page, and 
 - Speakers and their content! This is the most attractive thing to your audience
 - The details! Tell people when, where, and the location of your meetup
 - Food and beverage! What refreshments will you will be providing
-- Promote your sponsors! They will appreciate the shout out. You do this by thanking them for sponsoring your event and showcasing their logo. They also appreciate you linking to their website or their open source resource or insights (more attractive to this audience)
+- Promote your sponsors! They will appreciate the shout out. You do this by thanking them for sponsoring your event and showcasing their logo. They also appreciate you linking to their website or social media pages.
 - Giveaways! Not everyone will have this opportunity, over time you will generate sponsors for this, or [earn a voucher from us](README.md#benefits-of-joining-the-cncf-community-groups-program).
 
 ### Promotional Graphics
@@ -109,11 +109,11 @@ Here we have some templates in Canva that will at least help you with sizing and
 
 ### Partnering with other communities
 
-This is acceptable, as long as it is a general tech community or open source community. Usually the exchange is presence at their events, and your brand recognition. CNCF just asks you do not market their events to your members.
+This is acceptable, as long as it is a general tech community or open source community. Usually the exchange is presence at their events, and your brand recognition. CNCF just asks you do not market to the chapters for the benefit of a specific vendor.
 
 ## Community Group Inactivity
 
-If your group has more than 90 days of inactivity in the number of events/meetups being held, then you will be deemed an “Inactive” group via the Cloud Native Computing Foundation and removed from [community.cncf.io](https://community.cncf.io/). Upon group dormancy, leadership is reset and new organizers may step in without the approval of former organizers.
+If your group has more than 90 days of inactivity in the number of events/meetups being held, then you will be deemed an "Inactive" group via the Cloud Native Computing Foundation and removed from the CNCG directory and the community.cncf.io platform.
 
 Technical Community Groups that fail to meet at least six times in a calendar year will also be considered inactive.
 
