@@ -34,6 +34,22 @@ body:
     placeholder: e.g. Audra Montenegro, CNCF, https://github.com/AudMonte01, https://www.linkedin.com/in/audramontenegro/, Audra Montenegro in CNCF Slack, https://community.cncf.io/u/m8bqcv/#/about
   validations:
     required: true
+- id: organizer_inclusivity
+  type: checkboxes
+  attributes:
+    label: Inclusive
+    description: "You agree to be inclusive of all people eager to learn about cloud native, regardless of their level of expertise in their open source journey."
+    options:
+      - label: I/We agree. To ensure this, I/we have recently completed the [Inclusive Open Source Community Orientation (LFC102) course](https://training.linuxfoundation.org/training/inclusive-open-source-community-orientation-lfc102/)
+        required: true
+- id: organizer_inclusivity_badge_1
+  type: input
+  attributes:
+    label: Link to your LFC102 Credly Badge
+    placeholder: e.g. https://www.credly.com/badges/...
+    description: "Please paste the link to your Credly badge proving completion of the LFC102 course."
+  validations:
+    required: true
 - id: organizer_2
   type: textarea
   attributes:
@@ -41,11 +57,27 @@ body:
     placeholder: e.g. Audra Montenegro, CNCF, https://github.com/AudMonte01, https://www.linkedin.com/in/audramontenegro/, Audra Montenegro in CNCF Slack, https://community.cncf.io/u/m8bqcv/#/about
   validations:
     required: false
+- id: organizer_inclusivity_badge_2
+  type: input
+  attributes:
+    label: Link to your co-organizers LFC102 Credly Badge
+    placeholder: e.g. https://www.credly.com/badges/...
+    description: "Please paste the link to your Credly badge proving completion of the LFC102 course."
+  validations:
+    required: false
 - id: organizer_3
   type: textarea
   attributes:
     label: Tell us about your co-organizer. List their name, email, company, GitHub URL, LinkedIn URL, CNCF Slack workspace name (or if they need to be invited), and their required profile link on community.cncf.io
     placeholder: e.g. Audra Montenegro, CNCF, https://github.com/AudMonte01, https://www.linkedin.com/in/audramontenegro/, Audra Montenegro in CNCF Slack, https://community.cncf.io/u/m8bqcv/#/about
+  validations:
+    required: false
+- id: organizer_inclusivity_badge_3
+  type: input
+  attributes:
+    label: Link to your co-organizers LFC102 Credly Badge
+    placeholder: e.g. https://www.credly.com/badges/...
+    description: "Please paste the link to your Credly badge proving completion of the LFC102 course."
   validations:
     required: false
 - id: meetupDOTcom
@@ -85,14 +117,6 @@ body:
     description: "Not all CNCG organizers can be from the same company."
     options:
       - label: I/We agree that if there is more than one organizer now or onboarded in the future, the majority will come from different companies.
-        required: true
-- id: organizer_inclusivity
-  type: checkboxes
-  attributes:
-    label: Inclusive
-    description: "You agree to be inclusive of all people eager to learn about cloud native, regardless of their level of expertise in their open source journey."
-    options:
-      - label: I/We agree. To ensure this, I/we have recently completed the [Inclusive Open Source Community Orientation (LFC102) course](https://training.linuxfoundation.org/training/inclusive-open-source-community-orientation-lfc102/)
         required: true
 - id: organizer_neutrality
   type: checkboxes
