@@ -8,6 +8,10 @@ env:
   # Setting an environment variable with the value of a configuration variable
   SESSIONIZE_LATEST_SESSION_ID_PREVIOUS: ${{ vars.SESSIONIZE_LATEST_SESSION_ID }}
 
+# No checkout. The retrieve job hits Sessionize + Slack webhooks; the
+# update-github-variable job uses secrets.REPO_ACCESS_TOKEN (not GITHUB_TOKEN).
+permissions: {}
+
 jobs:
   retrieve-latest-session:
     name: retrieve-latest-session
