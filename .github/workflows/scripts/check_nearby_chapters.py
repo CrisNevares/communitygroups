@@ -3,18 +3,27 @@
 Check for nearby CNCF Community Group chapters when a new chapter request is opened.
 """
 
-import json
 import os
 import re
 import sys
 import requests
-from bs4 import BeautifulSoup
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
 # Distance threshold in kilometers
 DISTANCE_THRESHOLD_KM = 100
+
+# Open Community Groups JSON search API. The CNCF program migrated from
+# community.cncf.io to ocgroups.dev; this endpoint returns groups (with
+# coordinates) as JSON, replacing the old community.cncf.io HTML scrape.
+# See https://github.com/cncf/open-community-groups (handler: /explore/groups/search).
+CHAPTERS_API_URL = "https://ocgroups.dev/explore/groups/search"
+CHAPTERS_COMMUNITY = "cncf"
+# Max page size accepted by the API (MAX_PAGINATION_LIMIT in the server).
+CHAPTERS_PAGE_SIZE = 100
+# Safety cap on pages fetched, in case `total` is unreliable.
+CHAPTERS_MAX_PAGES = 50
 
 def extract_location_from_issue(issue_body):
     """
@@ -63,105 +72,110 @@ def get_coordinates(location):
         print(f"Geocoding error for '{location}': {e}", file=sys.stderr)
         return None
 
+def normalize_chapter(group):
+    """
+    Map an Open Community Groups search result to the chapter shape used
+    downstream: {name, location, geocode_hint, url, latitude, longitude}.
+    Returns None if the group has no usable name or URL.
+    """
+    name = group.get('name', '')
+    city = group.get('city')
+    country = group.get('country_name')
+    latitude = group.get('latitude')
+    longitude = group.get('longitude')
+
+    # Human-readable location used as context in the posted comment.
+    if city and country:
+        location = f"{city}, {country}"
+    else:
+        location = city or country or ''
+
+    # String to geocode only when the API does not supply coordinates. Prefer
+    # the physical location so it resolves cleanly; fall back to the group name.
+    geocode_hint = location or name
+
+    # Public group URL: /{community}/group/{slug}. The admin-managed
+    # "pretty" slug takes precedence when present (matches public_slug() server-side).
+    community = group.get('community_name') or CHAPTERS_COMMUNITY
+    slug = group.get('slug_pretty') or group.get('slug')
+    url = f"https://ocgroups.dev/{community}/group/{slug}" if slug else ''
+
+    if not (name and url):
+        return None
+
+    return {
+        'name': name,
+        'location': location,
+        'geocode_hint': geocode_hint,
+        'url': url,
+        'latitude': latitude,
+        'longitude': longitude,
+    }
+
+
 def fetch_existing_chapters():
     """
-    Fetch the list of existing chapters from community.cncf.io/chapters/
+    Fetch the list of existing CNCF chapters from the Open Community Groups
+    JSON search API (ocgroups.dev), paging through all results.
     """
-    url = "https://community.cncf.io/chapters/"
+    chapters = []
 
     try:
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
+        for page in range(CHAPTERS_MAX_PAGES):
+            offset = page * CHAPTERS_PAGE_SIZE
+            # community is an array filter; serde_qs expects community[0]=...
+            params = [
+                ('community[0]', CHAPTERS_COMMUNITY),
+                ('limit', CHAPTERS_PAGE_SIZE),
+                ('offset', offset),
+                ('sort_by', 'name'),
+            ]
+            response = requests.get(CHAPTERS_API_URL, params=params, timeout=30)
+            response.raise_for_status()
+            payload = response.json()
 
-        # Extract the localChapters JavaScript variable from the page
-        content = response.text
+            groups = payload.get('groups', [])
+            for group in groups:
+                chapter = normalize_chapter(group)
+                if chapter:
+                    chapters.append(chapter)
 
-        # Find the start of the localChapters array
-        start_match = re.search(r'var\s+localChapters\s*=\s*\[', content)
+            total = payload.get('total', 0)
+            # Stop once we've fetched everything (or the page came back short).
+            if len(groups) < CHAPTERS_PAGE_SIZE or offset + CHAPTERS_PAGE_SIZE >= total:
+                break
 
-        if not start_match:
-            print("Could not find localChapters variable in page", file=sys.stderr)
+        if not chapters:
+            print("No chapters returned by the API", file=sys.stderr)
             return get_fallback_chapters()
 
-        # Find the matching closing bracket by counting brackets
-        start_pos = start_match.end() - 1  # Position of the opening '['
-        bracket_count = 0
-        end_pos = start_pos
-
-        for i in range(start_pos, len(content)):
-            if content[i] == '[':
-                bracket_count += 1
-            elif content[i] == ']':
-                bracket_count -= 1
-                if bracket_count == 0:
-                    end_pos = i + 1
-                    break
-
-        if bracket_count != 0:
-            print("Could not find matching bracket for localChapters array", file=sys.stderr)
-            return get_fallback_chapters()
-
-        chapters_json = content[start_pos:end_pos]
-
-        try:
-            # Parse the JSON array
-            chapters_data = json.loads(chapters_json)
-
-            chapters = []
-            for chapter in chapters_data:
-                # Extract chapter information
-                city = chapter.get('city_name') or chapter.get('city', '')
-                country = chapter.get('country', '')
-                url = chapter.get('url', '')
-                latitude = chapter.get('latitude')
-                longitude = chapter.get('longitude')
-
-                # Create a readable name
-                if city and country:
-                    name = f"{city}, {country}"
-                elif city:
-                    name = city
-                else:
-                    # Extract name from URL as fallback
-                    name = url.rstrip('/').split('/')[-1].replace('-', ' ').title()
-
-                if name and url:
-                    chapters.append({
-                        'name': name,
-                        'url': url,
-                        'latitude': latitude,
-                        'longitude': longitude
-                    })
-
-            print(f"Successfully parsed {len(chapters)} chapters from JavaScript data", file=sys.stderr)
-            return chapters
-        except json.JSONDecodeError as e:
-            print(f"Error parsing JSON data: {e}", file=sys.stderr)
-            return get_fallback_chapters()
+        print(f"Successfully fetched {len(chapters)} chapters from the API", file=sys.stderr)
+        return chapters
 
     except requests.RequestException as e:
         print(f"Error fetching chapters: {e}", file=sys.stderr)
         return get_fallback_chapters()
-    except Exception as e:
+    except (ValueError, KeyError) as e:
         print(f"Error parsing chapters data: {e}", file=sys.stderr)
         return get_fallback_chapters()
 
 def get_fallback_chapters():
     """
-    Fallback list of major CNCF chapters in case web scraping fails.
+    Fallback list of major CNCF chapters in case the API call fails.
+    Coordinates are embedded so this path does not depend on geocoding.
     This should be updated periodically.
     """
     return [
-        {'name': 'San Francisco', 'url': 'https://community.cncf.io/cloud-native-san-francisco/'},
-        {'name': 'New York City', 'url': 'https://community.cncf.io/cloud-native-new-york-city/'},
-        {'name': 'London', 'url': 'https://community.cncf.io/cloud-native-london/'},
-        {'name': 'Berlin', 'url': 'https://community.cncf.io/cloud-native-berlin/'},
-        {'name': 'Amsterdam', 'url': 'https://community.cncf.io/cloud-native-amsterdam/'},
-        {'name': 'Paris', 'url': 'https://community.cncf.io/cloud-native-paris/'},
-        {'name': 'Tokyo', 'url': 'https://community.cncf.io/cloud-native-community-japan/'},
-        {'name': 'Bangalore', 'url': 'https://community.cncf.io/cloud-native-bangalore/'},
-        {'name': 'Sydney', 'url': 'https://community.cncf.io/cloud-native-sydney/'},
-        {'name': 'Singapore', 'url': 'https://community.cncf.io/cloud-native-singapore/'},
+        {'name': 'San Francisco, USA', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 37.7749, 'longitude': -122.4194},
+        {'name': 'New York City, USA', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 40.7128, 'longitude': -74.0060},
+        {'name': 'London, UK', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 51.5074, 'longitude': -0.1278},
+        {'name': 'Berlin, Germany', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 52.5200, 'longitude': 13.4050},
+        {'name': 'Amsterdam, Netherlands', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 52.3676, 'longitude': 4.9041},
+        {'name': 'Paris, France', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 48.8566, 'longitude': 2.3522},
+        {'name': 'Tokyo, Japan', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 35.6762, 'longitude': 139.6503},
+        {'name': 'Bangalore, India', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 12.9716, 'longitude': 77.5946},
+        {'name': 'Sydney, Australia', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': -33.8688, 'longitude': 151.2093},
+        {'name': 'Singapore', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 1.3521, 'longitude': 103.8198},
     ]
 
 def find_nearby_chapters(requested_location, existing_chapters):
@@ -183,7 +197,7 @@ def find_nearby_chapters(requested_location, existing_chapters):
         if chapter.get('latitude') is not None and chapter.get('longitude') is not None:
             chapter_coords = (chapter['latitude'], chapter['longitude'])
         else:
-            chapter_coords = get_coordinates(chapter['name'])
+            chapter_coords = get_coordinates(chapter.get('geocode_hint') or chapter['name'])
 
         if chapter_coords:
             distance = geodesic(requested_coords, chapter_coords).kilometers
@@ -192,6 +206,7 @@ def find_nearby_chapters(requested_location, existing_chapters):
             if distance < DISTANCE_THRESHOLD_KM:
                 nearby_chapters.append({
                     'name': chapter['name'],
+                    'location': chapter.get('location', ''),
                     'url': chapter['url'],
                     'distance_km': round(distance, 2)
                 })
@@ -210,22 +225,29 @@ def format_output(nearby_chapters):
 
     output = []
     for chapter in nearby_chapters:
-        output.append(f"- **{chapter['name']}** (~{chapter['distance_km']} km away) - {chapter['url']}")
+        location = f" — {chapter['location']}" if chapter.get('location') else ""
+        output.append(
+            f"- **{chapter['name']}**{location} (~{chapter['distance_km']} km away) - {chapter['url']}"
+        )
 
     return '\n'.join(output)
 
 def set_github_output(name, value):
     """
-    Set GitHub Actions output variable.
+    Set a GitHub Actions output variable.
+
+    Uses the heredoc form required by the $GITHUB_OUTPUT file for multi-line
+    values; the older `%0A` percent-encoding is NOT decoded from that file and
+    would surface literal `%0A` in the posted comment.
     """
     github_output = os.getenv('GITHUB_OUTPUT')
     if github_output:
+        # A delimiter that cannot appear in the value (per Actions guidance).
+        delimiter = 'EOF_NEARBY_CHAPTERS'
         with open(github_output, 'a') as f:
-            # Escape newlines and special characters for multiline output
-            value_escaped = value.replace('%', '%25').replace('\n', '%0A').replace('\r', '%0D')
-            f.write(f"{name}={value_escaped}\n")
+            f.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
     else:
-        print(f"::set-output name={name}::{value}")
+        print(f"{name}={value}")
 
 def main():
     """
