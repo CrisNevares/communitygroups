@@ -24,6 +24,11 @@ CHAPTERS_COMMUNITY = "cncf"
 CHAPTERS_PAGE_SIZE = 100
 # Safety cap on pages fetched, in case `total` is unreliable.
 CHAPTERS_MAX_PAGES = 50
+# Only region-specific chapters are relevant to a "nearby chapters" check.
+# Other categories (virtual, technical/topic-based, hosted-project communities)
+# are not tied to a geographic location even when they list an HQ city, so they
+# are excluded. Matched on the category slug, which is stable across renames.
+REGION_SPECIFIC_CATEGORY_SLUGS = {"regional"}
 
 def extract_location_from_issue(issue_body):
     """
@@ -76,8 +81,16 @@ def normalize_chapter(group):
     """
     Map an Open Community Groups search result to the chapter shape used
     downstream: {name, location, geocode_hint, url, latitude, longitude}.
-    Returns None if the group has no usable name or URL.
+    Returns None for non-region-specific chapters, or those with no usable
+    name or URL.
     """
+    # Skip chapters whose category is not region-specific (virtual, topic-based,
+    # hosted-project communities). They are not tied to a location, and trying to
+    # geolocate them by name produces false "nearby" matches.
+    category_slug = (group.get('category') or {}).get('slug')
+    if category_slug not in REGION_SPECIFIC_CATEGORY_SLUGS:
+        return None
+
     name = group.get('name', '')
     city = group.get('city')
     country = group.get('country_name')
@@ -90,9 +103,11 @@ def normalize_chapter(group):
     else:
         location = city or country or ''
 
-    # String to geocode only when the API does not supply coordinates. Prefer
-    # the physical location so it resolves cleanly; fall back to the group name.
-    geocode_hint = location or name
+    # String to geocode only when the API does not supply coordinates. Use the
+    # physical location, never the group name (geocoding an arbitrary name
+    # yields spurious matches); if there is no location, the chapter is skipped
+    # in find_nearby_chapters rather than guessed.
+    geocode_hint = location
 
     # Public group URL: /{community}/group/{slug}. The admin-managed
     # "pretty" slug takes precedence when present (matches public_slug() server-side).
@@ -193,11 +208,14 @@ def find_nearby_chapters(requested_location, existing_chapters):
     nearby_chapters = []
 
     for chapter in existing_chapters:
-        # Use coordinates from the chapter data if available, otherwise geocode
+        # Use coordinates from the chapter data if available. Otherwise geocode
+        # the location hint (city/country) only; skip if there is no hint.
         if chapter.get('latitude') is not None and chapter.get('longitude') is not None:
             chapter_coords = (chapter['latitude'], chapter['longitude'])
+        elif chapter.get('geocode_hint'):
+            chapter_coords = get_coordinates(chapter['geocode_hint'])
         else:
-            chapter_coords = get_coordinates(chapter.get('geocode_hint') or chapter['name'])
+            chapter_coords = None
 
         if chapter_coords:
             distance = geodesic(requested_coords, chapter_coords).kilometers
