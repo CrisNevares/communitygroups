@@ -6,28 +6,43 @@ Check for nearby CNCF Community Group chapters when a new chapter request is ope
 import os
 import re
 import sys
+import time
 import requests
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
-# Distance threshold in kilometers
+# Distance threshold for a chapter to count as "nearby".
 DISTANCE_THRESHOLD_KM = 100
+DISTANCE_THRESHOLD_M = DISTANCE_THRESHOLD_KM * 1000
 
 # Open Community Groups JSON search API. The CNCF program migrated from
-# community.cncf.io to ocgroups.dev; this endpoint returns groups (with
-# coordinates) as JSON, replacing the old community.cncf.io HTML scrape.
+# community.cncf.io to ocgroups.dev. This endpoint can do the distance search
+# server-side: given the viewer's coordinates (via CloudFront-Viewer-* headers)
+# plus distance + sort_by=distance, it returns only groups within range, already
+# sorted nearest-first. That is much lighter than pulling every group and
+# measuring distances locally, and it grows well as the chapter list does.
 # See https://github.com/cncf/open-community-groups (handler: /explore/groups/search).
 CHAPTERS_API_URL = "https://ocgroups.dev/explore/groups/search"
 CHAPTERS_COMMUNITY = "cncf"
-# Max page size accepted by the API (MAX_PAGINATION_LIMIT in the server).
-CHAPTERS_PAGE_SIZE = 100
-# Safety cap on pages fetched, in case `total` is unreliable.
-CHAPTERS_MAX_PAGES = 50
-# Only region-specific chapters are relevant to a "nearby chapters" check.
-# Other categories (virtual, technical/topic-based, hosted-project communities)
-# are not tied to a geographic location even when they list an HQ city, so they
-# are excluded. Matched on the category slug, which is stable across renames.
+# Upper bound on results requested. The nearby set is small in practice; this is
+# just a safety cap (the server's MAX_PAGINATION_LIMIT is 100).
+RESULTS_LIMIT = 100
+# API-failure handling. The check is advisory, so on a transient failure we retry
+# a few times with a short linear backoff; if it still fails, main() reports a
+# `status` of "error" and the workflow invites the submitter to comment /recheck.
+RETRY_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 2
+# Header names the OCG server reads viewer coordinates from. (The maintainers
+# noted these names may change eventually.)
+VIEWER_LATITUDE_HEADER = "CloudFront-Viewer-Latitude"
+VIEWER_LONGITUDE_HEADER = "CloudFront-Viewer-Longitude"
+# Only region-specific chapters are relevant to a "nearby chapters" check. The
+# distance search already drops the coordinate-less groups (virtual, most
+# topic-based ones), which is what previously caused false matches; this is a
+# defensive filter for any non-regional group that still carries coordinates
+# (e.g. a hosted-project community listing an HQ city). Matched on the category
+# slug, which is stable across display-name renames.
 REGION_SPECIFIC_CATEGORY_SLUGS = {"regional"}
 
 def extract_location_from_issue(issue_body):
@@ -80,13 +95,11 @@ def get_coordinates(location):
 def normalize_chapter(group):
     """
     Map an Open Community Groups search result to the chapter shape used
-    downstream: {name, location, geocode_hint, url, latitude, longitude}.
-    Returns None for non-region-specific chapters, or those with no usable
-    name or URL.
+    downstream: {name, location, url, latitude, longitude}. Returns None for
+    non-region-specific chapters, or those with no usable name or URL.
     """
     # Skip chapters whose category is not region-specific (virtual, topic-based,
-    # hosted-project communities). They are not tied to a location, and trying to
-    # geolocate them by name produces false "nearby" matches.
+    # hosted-project communities). They are not tied to a location.
     category_slug = (group.get('category') or {}).get('slug')
     if category_slug not in REGION_SPECIFIC_CATEGORY_SLUGS:
         return None
@@ -94,20 +107,12 @@ def normalize_chapter(group):
     name = group.get('name', '')
     city = group.get('city')
     country = group.get('country_name')
-    latitude = group.get('latitude')
-    longitude = group.get('longitude')
 
     # Human-readable location used as context in the posted comment.
     if city and country:
         location = f"{city}, {country}"
     else:
         location = city or country or ''
-
-    # String to geocode only when the API does not supply coordinates. Use the
-    # physical location, never the group name (geocoding an arbitrary name
-    # yields spurious matches); if there is no location, the chapter is skipped
-    # in find_nearby_chapters rather than guessed.
-    geocode_hint = location
 
     # Public group URL: /{community}/group/{slug}. The admin-managed
     # "pretty" slug takes precedence when present (matches public_slug() server-side).
@@ -121,118 +126,62 @@ def normalize_chapter(group):
     return {
         'name': name,
         'location': location,
-        'geocode_hint': geocode_hint,
         'url': url,
-        'latitude': latitude,
-        'longitude': longitude,
+        'latitude': group.get('latitude'),
+        'longitude': group.get('longitude'),
     }
 
 
-def fetch_existing_chapters():
+def fetch_nearby_chapters(latitude, longitude):
     """
-    Fetch the list of existing CNCF chapters from the Open Community Groups
-    JSON search API (ocgroups.dev), paging through all results.
+    Ask the Open Community Groups search API for CNCF chapters within
+    DISTANCE_THRESHOLD_KM of the given coordinates, sorted nearest-first. The
+    server does the distance filtering; we pass the viewer location via headers.
+    Retries a few times on failure (the failures are usually transient). Returns
+    a list of normalized chapters, or None if every attempt fails.
     """
-    chapters = []
-
-    try:
-        for page in range(CHAPTERS_MAX_PAGES):
-            offset = page * CHAPTERS_PAGE_SIZE
-            # community is an array filter; serde_qs expects community[0]=...
-            params = [
-                ('community[0]', CHAPTERS_COMMUNITY),
-                ('limit', CHAPTERS_PAGE_SIZE),
-                ('offset', offset),
-                ('sort_by', 'name'),
-            ]
-            response = requests.get(CHAPTERS_API_URL, params=params, timeout=30)
-            response.raise_for_status()
-            payload = response.json()
-
-            groups = payload.get('groups', [])
-            for group in groups:
-                chapter = normalize_chapter(group)
-                if chapter:
-                    chapters.append(chapter)
-
-            total = payload.get('total', 0)
-            # Stop once we've fetched everything (or the page came back short).
-            if len(groups) < CHAPTERS_PAGE_SIZE or offset + CHAPTERS_PAGE_SIZE >= total:
-                break
-
-        if not chapters:
-            print("No chapters returned by the API", file=sys.stderr)
-            return get_fallback_chapters()
-
-        print(f"Successfully fetched {len(chapters)} chapters from the API", file=sys.stderr)
-        return chapters
-
-    except requests.RequestException as e:
-        print(f"Error fetching chapters: {e}", file=sys.stderr)
-        return get_fallback_chapters()
-    except (ValueError, KeyError) as e:
-        print(f"Error parsing chapters data: {e}", file=sys.stderr)
-        return get_fallback_chapters()
-
-def get_fallback_chapters():
-    """
-    Fallback list of major CNCF chapters in case the API call fails.
-    Coordinates are embedded so this path does not depend on geocoding.
-    This should be updated periodically.
-    """
-    return [
-        {'name': 'San Francisco, USA', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 37.7749, 'longitude': -122.4194},
-        {'name': 'New York City, USA', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 40.7128, 'longitude': -74.0060},
-        {'name': 'London, UK', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 51.5074, 'longitude': -0.1278},
-        {'name': 'Berlin, Germany', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 52.5200, 'longitude': 13.4050},
-        {'name': 'Amsterdam, Netherlands', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 52.3676, 'longitude': 4.9041},
-        {'name': 'Paris, France', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 48.8566, 'longitude': 2.3522},
-        {'name': 'Tokyo, Japan', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 35.6762, 'longitude': 139.6503},
-        {'name': 'Bangalore, India', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 12.9716, 'longitude': 77.5946},
-        {'name': 'Sydney, Australia', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': -33.8688, 'longitude': 151.2093},
-        {'name': 'Singapore', 'url': 'https://ocgroups.dev/explore?community[0]=cncf&entity=groups', 'latitude': 1.3521, 'longitude': 103.8198},
+    headers = {
+        VIEWER_LATITUDE_HEADER: str(latitude),
+        VIEWER_LONGITUDE_HEADER: str(longitude),
+    }
+    # community is an array filter; serde_qs expects community[0]=...
+    params = [
+        ('community[0]', CHAPTERS_COMMUNITY),
+        ('distance', DISTANCE_THRESHOLD_M),
+        ('sort_by', 'distance'),
+        ('limit', RESULTS_LIMIT),
     ]
 
-def find_nearby_chapters(requested_location, existing_chapters):
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        try:
+            response = requests.get(CHAPTERS_API_URL, params=params, headers=headers, timeout=30)
+            response.raise_for_status()
+            groups = response.json().get('groups', [])
+            chapters = [c for c in (normalize_chapter(g) for g in groups) if c]
+            print(f"API returned {len(groups)} nearby groups ({len(chapters)} regional)", file=sys.stderr)
+            return chapters
+        except (requests.RequestException, ValueError) as e:
+            print(f"Attempt {attempt}/{RETRY_ATTEMPTS} to reach the chapter API failed: {e}", file=sys.stderr)
+            if attempt < RETRY_ATTEMPTS:
+                time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+
+    print(f"Giving up after {RETRY_ATTEMPTS} attempts to reach the chapter API", file=sys.stderr)
+    return None
+
+def annotate_distance(requested_coords, chapters):
     """
-    Find chapters that are within DISTANCE_THRESHOLD_KM of the requested location.
+    Add a 'distance_km' field (distance from requested_coords) to each chapter
+    that has coordinates, dropping any without. Used for display; the API has
+    already restricted results to within the threshold.
     """
-    requested_coords = get_coordinates(requested_location)
-
-    if not requested_coords:
-        print(f"Could not geocode requested location: {requested_location}", file=sys.stderr)
-        return []
-
-    print(f"Requested location coordinates: {requested_coords}", file=sys.stderr)
-
-    nearby_chapters = []
-
-    for chapter in existing_chapters:
-        # Use coordinates from the chapter data if available. Otherwise geocode
-        # the location hint (city/country) only; skip if there is no hint.
-        if chapter.get('latitude') is not None and chapter.get('longitude') is not None:
-            chapter_coords = (chapter['latitude'], chapter['longitude'])
-        elif chapter.get('geocode_hint'):
-            chapter_coords = get_coordinates(chapter['geocode_hint'])
-        else:
-            chapter_coords = None
-
-        if chapter_coords:
-            distance = geodesic(requested_coords, chapter_coords).kilometers
-            print(f"Distance to {chapter['name']}: {distance:.2f} km", file=sys.stderr)
-
-            if distance < DISTANCE_THRESHOLD_KM:
-                nearby_chapters.append({
-                    'name': chapter['name'],
-                    'location': chapter.get('location', ''),
-                    'url': chapter['url'],
-                    'distance_km': round(distance, 2)
-                })
-
-    # Sort by distance
-    nearby_chapters.sort(key=lambda x: x['distance_km'])
-
-    return nearby_chapters
+    annotated = []
+    for chapter in chapters:
+        lat, lon = chapter.get('latitude'), chapter.get('longitude')
+        if lat is None or lon is None:
+            continue
+        distance = geodesic(requested_coords, (lat, lon)).kilometers
+        annotated.append({**chapter, 'distance_km': round(distance, 2)})
+    return annotated
 
 def format_output(nearby_chapters):
     """
@@ -267,6 +216,14 @@ def set_github_output(name, value):
     else:
         print(f"{name}={value}")
 
+def report(status, nearby_chapters=''):
+    """
+    Emit the two GitHub Actions outputs the workflow branches on:
+    `status` (found | none | error) and the `nearby_chapters` markdown list.
+    """
+    set_github_output('status', status)
+    set_github_output('nearby_chapters', nearby_chapters)
+
 def main():
     """
     Main function to check for nearby chapters.
@@ -276,30 +233,42 @@ def main():
 
     print(f"Issue title: {issue_title}", file=sys.stderr)
 
-    # Extract location from issue
+    # Extract location from issue. A body we can't parse isn't an API problem and
+    # a /recheck won't help, so report "none" (stay silent) rather than "error".
     requested_location = extract_location_from_issue(issue_body)
 
     if not requested_location:
         print("Could not extract location from issue body", file=sys.stderr)
-        set_github_output('nearby_chapters', '')
+        report('none')
         return
 
     print(f"Requested location: {requested_location}", file=sys.stderr)
 
-    # Fetch existing chapters
-    existing_chapters = fetch_existing_chapters()
-    print(f"Found {len(existing_chapters)} existing chapters", file=sys.stderr)
+    # Geocode the requested location so we can hand the coordinates to the API.
+    requested_coords = get_coordinates(requested_location)
+    if not requested_coords:
+        print(f"Could not geocode requested location: {requested_location}", file=sys.stderr)
+        report('none')
+        return
 
-    # Find nearby chapters
-    nearby_chapters = find_nearby_chapters(requested_location, existing_chapters)
+    print(f"Requested location coordinates: {requested_coords}", file=sys.stderr)
+
+    # Let the API do the distance search. None means it failed after retries;
+    # report "error" so the workflow can invite a /recheck.
+    chapters = fetch_nearby_chapters(*requested_coords)
+    if chapters is None:
+        report('error')
+        return
+
+    nearby_chapters = annotate_distance(requested_coords, chapters)
+    nearby_chapters.sort(key=lambda c: c['distance_km'])
 
     if nearby_chapters:
         print(f"Found {len(nearby_chapters)} nearby chapters", file=sys.stderr)
-        output = format_output(nearby_chapters)
-        set_github_output('nearby_chapters', output)
+        report('found', format_output(nearby_chapters))
     else:
         print("No nearby chapters found", file=sys.stderr)
-        set_github_output('nearby_chapters', '')
+        report('none')
 
 if __name__ == '__main__':
     main()
