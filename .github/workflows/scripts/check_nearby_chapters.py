@@ -37,12 +37,11 @@ RETRY_BACKOFF_SECONDS = 2
 # noted these names may change eventually.)
 VIEWER_LATITUDE_HEADER = "CloudFront-Viewer-Latitude"
 VIEWER_LONGITUDE_HEADER = "CloudFront-Viewer-Longitude"
-# Only region-specific chapters are relevant to a "nearby chapters" check. The
-# distance search already drops the coordinate-less groups (virtual, most
-# topic-based ones), which is what previously caused false matches; this is a
-# defensive filter for any non-regional group that still carries coordinates
-# (e.g. a hosted-project community listing an HQ city). Matched on the category
-# slug, which is stable across display-name renames.
+# Only region-specific chapters are relevant to a "nearby chapters" check. These
+# slugs are sent to the API as group_category filters so the server returns only
+# regional groups (see fetch_nearby_chapters); normalize_chapter re-checks them
+# as a cheap safety net in case that filter ever stops being honored. Matched on
+# the category slug, which is stable across display-name renames.
 REGION_SPECIFIC_CATEGORY_SLUGS = {"regional"}
 
 def extract_location_from_issue(issue_body):
@@ -99,7 +98,8 @@ def normalize_chapter(group):
     non-region-specific chapters, or those with no usable name or URL.
     """
     # Skip chapters whose category is not region-specific (virtual, topic-based,
-    # hosted-project communities). They are not tied to a location.
+    # hosted-project communities); they are not tied to a location. The API query
+    # already filters to these categories, so this is just a safety net.
     category_slug = (group.get('category') or {}).get('slug')
     if category_slug not in REGION_SPECIFIC_CATEGORY_SLUGS:
         return None
@@ -144,12 +144,20 @@ def fetch_nearby_chapters(latitude, longitude):
         VIEWER_LATITUDE_HEADER: str(latitude),
         VIEWER_LONGITUDE_HEADER: str(longitude),
     }
-    # community is an array filter; serde_qs expects community[0]=...
+    # community and group_category are array filters; serde_qs expects an indexed
+    # form (community[0]=..., group_category[0]=...). Filtering by category here
+    # rather than client-side keeps the query light and, more importantly, avoids
+    # a page of results filling with non-regional groups (which carry coordinates)
+    # and crowding valid regional chapters out of the limit.
     params = [
         ('community[0]', CHAPTERS_COMMUNITY),
         ('distance', DISTANCE_THRESHOLD_M),
         ('sort_by', 'distance'),
         ('limit', RESULTS_LIMIT),
+    ]
+    params += [
+        (f'group_category[{i}]', slug)
+        for i, slug in enumerate(sorted(REGION_SPECIFIC_CATEGORY_SLUGS))
     ]
 
     for attempt in range(1, RETRY_ATTEMPTS + 1):
